@@ -92,14 +92,10 @@ function VM.Run(Bytecode)
 			local Value = Stack[#Stack]
 			print(Value)
 			table.remove(Stack)
-		elseif instr.op == "BLOCK" then
-			PushEnvironment("PRIVATE")
-
-			for _, stmt in ipairs(instr.Body or instr.body or {}) do
-				ExecuteInstruction(stmt)
-			end
-
-			PopEnvironment()
+		elseif instr.op == "BLOCK_START" then
+            PushEnvironment("PRIVATE")
+        elseif instr.op == "BLOCK_END" then
+            PopEnvironment()
 		else
 			error("Unknown instruction: " .. tostring(instr.op))
 		end

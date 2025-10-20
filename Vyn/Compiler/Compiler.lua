@@ -37,9 +37,13 @@ local function CompileStatement(Node, Bytecode)
 		CompileExpression(Node.Value, Bytecode)
 		table.insert(Bytecode, { op = "DECLARE_VAR", Name = Node.Name, Scope = Node.Scope })
 	elseif Node.op == "BLOCK" then
-		for _, stmt in ipairs(Node.Body) do
-			CompileStatement(stmt, Bytecode)
-		end
+		table.insert(Bytecode, { op = "BLOCK_START" })
+
+        for _, stmt in ipairs(Node.Body) do
+            CompileStatement(stmt, Bytecode)
+        end
+		
+        table.insert(Bytecode, { op = "BLOCK_END" })
 	else
 		error("Unknown statement: "..tostring(Node.op))
 	end
