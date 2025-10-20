@@ -1,0 +1,17 @@
+# Global variable
+Score = 0
+
+# Player picks up coins
+{
+    Coins = 5
+    Bonus = 10
+
+    Total = Coins * Bonus
+    Score = Score + Total
+
+    print "Inside block: " + Total
+}
+
+# Outside block
+print "Final score: " + Score
+print "Coins outside block: " + Coins  # Should error / undefined
