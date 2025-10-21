@@ -2,13 +2,22 @@ local VM = {}
 
 function VM.Run(Bytecode)
 	local Stack = {}
-	local Environment = { { Type = "GLOBAL", Variables = {} } }
+	local Environment = { { Variables = {}, Privates = {} } }
 
-	local function PushEnvironment(EnvironmentType)
-        table.insert(Environment, { Type = (EnvironmentType or "BLOCK"), Variables = {} }) -- I believe it should be BLOCK by default, no?
+	local function PushEnvironment()
+        table.insert(Environment, { Variables = {}, Privates = {} })
     end
 
     local function PopEnvironment()
+		local CurrentEnvironment = Environment[#Environment]
+		CurrentEnvironment.Privates = {}
+		
+		for i = #Environment - 1, 1, -1 do
+			for Name in pairs(Environment[i].Privates) do
+				Environment[i].Privates[Name] = nil
+			end
+		end
+
         table.remove(Environment)
     end
 
@@ -17,11 +26,15 @@ function VM.Run(Bytecode)
 			local ENV = Environment[i]
 
 			if ENV.Variables[Name] ~= nil then
-				if ENV.Type == "PRIVATE" and ENV ~= Environment[#Environment] then
-					break -- Cant access private variables from inner/nested block
-				end
-
 				return ENV.Variables[Name]
+			end
+
+			if ENV.Privates[Name] ~= nil then
+				if i == #Environment then
+					return ENV.Privates[Name]
+				else
+					break
+				end
 			end
 		end
 
@@ -36,28 +49,32 @@ function VM.Run(Bytecode)
 				ENV.Variables[Name] = Value
 				return
 			end
+
+			if ENV.Privates[Name] ~= nil and i == #Environment then
+				ENV.Privates[Name] = Value
+				return
+			end
 		end
 
 		Environment[#Environment].Variables[Name] = Value
 	end
 
 	local function DeclareVariable(Name, Value, Scope)
+        local ENV = Environment[#Environment]
+
 		if Scope == "PRIVATE" then
-			Environment[#Environment].Variables[Name] = Value
+			ENV.Privates[Name] = Value
 		elseif Scope == "LOCAL" then
-			local EnvironmentToStore = nil
+			ENV.Variables[Name] = Value
 
-			for i = #Environment, 1, -1 do
-				local ENV = Environment[i]
+			--[[for i = #Environment, 1, -1 do
+				local Target = Environment[i]
 
-				if ENV.Type ~= "PRIVATE" then
-					EnvironmentToStore = ENV
-					break
+				if Target then
+					Target.Variables[Name] = Value
+					return
 				end
-			end
-
-			EnvironmentToStore = EnvironmentToStore or Environment[#Environment]
-			EnvironmentToStore.Variables[Name] = Value
+			end]]
 		else
 			Environment[1].Variables[Name] = Value
 		end
@@ -95,13 +112,7 @@ function VM.Run(Bytecode)
 			print(Value)
 			table.remove(Stack)
 		elseif instr.op == "BLOCK_START" then
-			for Name, _ in pairs(Environment[#Environment].Variables) do
-				if Environment[#Environment].Type == "PRIVATE" then
-					Environment[#Environment].Variables[Name] = nil
-				end
-			end
-
-            PushEnvironment("BLOCK")
+            PushEnvironment()
         elseif instr.op == "BLOCK_END" then
             PopEnvironment()
 		else

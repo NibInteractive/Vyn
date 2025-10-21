@@ -2,9 +2,19 @@ local Rules = {}
 
 -- Keywords
 Rules.Keywords = {
+    -- Variable Types --
     ["local"] = "LOCAL",
     ["private"] = "PRIVATE",
 
+    -- Function Keywords --
+    ["function"] = "FUNCTION",
+    ["fn"] = "FUNCTION",
+
+    ["return"] = "RETURN",
+    ["continue"] = "CONTINUE",
+    ["break"] = "BREAK",
+
+    -- 2Be in standard library
     ["print"] = "PRINT"
 }
 
@@ -30,7 +40,6 @@ Rules.Operators = {
     ["<="] = "LTEQ",
 }
 
--- Helper checks
 function Rules.IsDigit(Character)
     return Character:match("%d")
 end
