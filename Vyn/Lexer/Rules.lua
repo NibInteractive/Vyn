@@ -8,11 +8,18 @@ Rules.Keywords = {
 
     -- Function Keywords --
     ["function"] = "FUNCTION",
+    ["func"] = "FUNCTION",
     ["fn"] = "FUNCTION",
 
     ["return"] = "RETURN",
     ["continue"] = "CONTINUE",
     ["break"] = "BREAK",
+
+    -- Control
+    ["if"] = "IF",
+    ["else"] = "ELSE",
+    ["then"] = "THEN",
+    ["end"] = "END",
 
     -- 2Be in standard library
     ["print"] = "PRINT"
@@ -38,6 +45,12 @@ Rules.Operators = {
     ["<"] = "LT",
     [">="] = "GTEQ",
     ["<="] = "LTEQ",
+
+    -- Others --
+    [":"] = "COLON",
+    [","] = "COMMA",
+
+    ['"'] = "QUOTE",
 }
 
 function Rules.IsDigit(Character)

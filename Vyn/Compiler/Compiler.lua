@@ -44,6 +44,44 @@ local function CompileStatement(Node, Bytecode)
         end
 		
         table.insert(Bytecode, { op = "BLOCK_END" })
+	elseif Node.op == "IF" then
+		CompileExpression(Node.Condition, Bytecode)
+		
+    	local JumpIfFalseIndex = #Bytecode + 1
+        table.insert(Bytecode, { op = "JUMP_IF_FALSE", Target = nil }) -- Todo: Fix later
+
+        for _, stmt in ipairs(Node.Body) do
+            CompileStatement(stmt, Bytecode)
+        end
+
+        if Node.ElseBody then
+            local JumpOverElseIndex = #Bytecode + 1
+            table.insert(Bytecode, { op = "JUMP", Target = nil })
+
+			Bytecode[JumpIfFalseIndex].Target = #Bytecode + 1
+
+            for _, stmt in ipairs(Node.ElseBody) do
+                CompileStatement(stmt, Bytecode)
+            end
+
+            Bytecode[JumpOverElseIndex].Target = #Bytecode + 1
+        else
+            Bytecode[JumpIfFalseIndex].Target = #Bytecode + 1
+        end
+	elseif Node.op == "FUNCTION" then
+		local FunctionBytecode = {}
+		local OldBytecode = Bytecode
+		Bytecode = FunctionBytecode
+
+		for _, stmt in ipairs(Node.Body) do
+			CompileStatement(stmt, Bytecode)
+		end
+
+		table.insert(Bytecode, { op = "RETURN" })
+
+       	Bytecode = OldBytecode
+
+       	table.insert(Bytecode, { op = "FUNCTION_DECL", Name = Node.Name, Params = Node.Params, Body = FunctionBytecode })
 	else
 		error("Unknown statement: "..tostring(Node.op))
 	end

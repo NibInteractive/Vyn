@@ -37,7 +37,137 @@ local function GetPrecedence(token)
 	return Precedence[token.Type] or 0
 end
 
-local function ParseStatement(Tokens, i)
+local function ParseBlock(Tokens, i, Style)
+    local Body = {}
+
+    if Style == "BRACE" then
+        i = i + 1
+
+        while Tokens[i] and Tokens[i].Type ~= "RBRACE" do
+            local stmt
+            stmt, i = ParseStatement(Tokens, i)
+
+            table.insert(Body, stmt)
+        end
+
+        _, i = Consume(Tokens, i, "RBRACE")
+    elseif Style == "COLON" then
+        local BaseIndent = Tokens[i-1].Indent or 0
+        i = i + 1
+
+        while Tokens[i] and (Tokens[i].Indent or 0) > BaseIndent do
+            local stmt
+            stmt, i = ParseStatement(Tokens, i)
+
+            table.insert(Body, stmt)
+        end
+    elseif Style == "THEN" then
+        i = i + 1
+
+        while Tokens[i] and Tokens[i].Type ~= "END" do
+            local stmt
+            stmt, i = ParseStatement(Tokens, i)
+
+            table.insert(Body, stmt)
+        end
+
+        _, i = Consume(Tokens, i, "END")
+    end
+
+    return { op = "BLOCK", Body = Body }, i
+end
+
+local function ParseIf(Tokens, i)
+    i = i + 1
+    local Condition, NextIndex = ParseExpression(Tokens, i)
+    i = NextIndex
+
+    local Style
+
+    if Tokens[i] then
+        if Tokens[i].Type == "COLON" then
+            Style = "COLON"
+        elseif Tokens[i].Type == "THEN" then
+            Style = "THEN"
+        elseif Tokens[i].Type == "LBRACE" then
+            Style = "BRACE"
+        else
+            error("Expected block start after if condition")
+        end
+    end
+
+    local BlockNode
+    BlockNode, i = ParseBlock(Tokens, i, Style)
+
+    local Node = { op = "IF", Condition = Condition, Body = BlockNode.Body }
+
+    if Tokens[i] and Tokens[i].Type == "ELSE" then
+        i = i + 1
+        local ElseStyle
+
+        if Tokens[i] then
+            if Tokens[i].Type == "COLON" then
+                ElseStyle = "COLON"
+            elseif Tokens[i].Type == "THEN" then
+                ElseStyle = "THEN"
+            elseif Tokens[i].Type == "LBRACE" then
+                ElseStyle = "BRACE"
+            else
+                error("Expected block start after else")
+            end
+        end
+
+        local ElseBlock
+        ElseBlock, i = ParseBlock(Tokens, i, ElseStyle)
+        Node.ElseBody = ElseBlock.Body
+    end
+
+    return Node, i
+end
+
+local function ParseFunction(Tokens, i)
+    i = i + 1
+
+    local Name
+
+    if Tokens[i].Type == "IDENTIFIER" then
+        Name = Tokens[i].Value
+        i = i + 1
+    end
+
+    _, i = Consume(Tokens, i, "LPAREN")
+
+    local Params = {}
+
+    while Tokens[i] and Tokens[i].Type ~= "RPAREN" do
+        if Tokens[i].Type == "IDENTIFIER" then
+            table.insert(Params, Tokens[i].Value)
+        end
+
+        i = i + 1
+    end
+
+    _, i = Consume(Tokens, i, "RPAREN")
+
+    local Style
+
+    if Tokens[i].Type == "LBRACE" then
+        Style = "BRACE"
+    elseif Tokens[i].Type == "END" then
+        Style = "THEN"
+    elseif Tokens[i].Type == "COLON" then
+        Style = "COLON"
+    else
+        Style = "BRACE"
+    end
+
+    local BlockNode
+    BlockNode, i = ParseBlock(Tokens, i, Style)
+
+    return { op = "FUNCTION", Name = Name, Params = Params, Body = BlockNode.Body }, i
+end
+
+function ParseStatement(Tokens, i)
     local _Token = Tokens[i]
 
     if _Token.Type == "LOCAL" or _Token.Type == "PRIVATE" then
@@ -65,6 +195,10 @@ local function ParseStatement(Tokens, i)
         i = NextIndex
 
         return { op = "PRINT", args = { Expression } }, i
+    elseif _Token.Type == "IF" then
+        return ParseIf(Tokens, i)
+    elseif _Token.Type == "FUNCTION" then
+        return ParseFunction(Tokens, i)
     elseif _Token.Type == "IDENTIFIER" and Tokens[i+1] and Tokens[i+1].Type == "ASSIGN" then
         local Name = _Token.Value
         local Expression
@@ -86,6 +220,7 @@ end
 
 function ParsePrimary(Tokens, i)
 	local _Token = Tokens[i]
+
 	if not _Token then
 		error("Parser Error: Unexpected end of input while parsing primary")
 	end
@@ -99,7 +234,7 @@ function ParsePrimary(Tokens, i)
 
 		Node, i = ParseExpression(Tokens, i + 1)
 		_, i = Consume(Tokens, i, "RPAREN")
-
+        
 		return Node, i
     elseif _Token.Type == "LBRACE" then
         local Body = {}

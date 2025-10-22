@@ -7,11 +7,11 @@ do
     local bonus = 10
 
     local total = coins * bonus
-    score = score + total
+    Score = Score + total
 
     print("Inside block: " .. total)
 end
 
 -- Outside block
-print("Final score: " .. score)
+print("Final score: " .. Score)
 -- print("Coins outside block: " .. coins) -- Would error: coins is local

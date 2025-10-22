@@ -3,6 +3,8 @@ local VM = {}
 function VM.Run(Bytecode)
 	local Stack = {}
 	local Environment = { { Variables = {}, Privates = {} } }
+	local Functions = {}
+	local PC = 1
 
 	local function PushEnvironment()
         table.insert(Environment, { Variables = {}, Privates = {} })
@@ -115,14 +117,59 @@ function VM.Run(Bytecode)
             PushEnvironment()
         elseif instr.op == "BLOCK_END" then
             PopEnvironment()
+		elseif instr.op == "FUNCTION_DECL" then
+			Functions[instr.Name] = { Params = instr.Params, Body = instr.Body }; return nil
+		elseif instr.op == "CALL_FUNCTION" then
+			local _FUNC = Functions[instr.Name]
+			if not _FUNC then error("Runtime Error : '"..instr.Name.."' not found") end
+
+			local Arguments = {}
+			for i=1, #_FUNC.Params do
+				table.insert(Arguments, 1, table.remove(Stack))
+			end
+
+			PushEnvironment()
+
+			for i, Param in ipairs(_FUNC.Params) do
+				DeclareVariable(Param, Arguments[i], "LOCAL")
+			end
+
+			VM.Run(_FUNC.Body)
+			PopEnvironment()
+
+			return nil
+		elseif instr.op == "RETURN" then
+			return "RETURN"
+		elseif instr.op == "JUMP_IF_ELSE" then
+			local Condition = table.remove(Stack)
+			if not Condition then
+				return instr.Target
+			else
+				return nil
+			end
+		elseif instr.op == "JUMP" then
+			PC = instr.Target
+			return
 		else
 			error("Unknown instruction: " .. tostring(instr.op))
 		end
 	end
 
-	for _, Instruction in ipairs(Bytecode) do
+	while PC <= #Bytecode do
+        local Instruction = Bytecode[PC]
+        local NewPC = ExecuteInstruction(Instruction)
+
+        if NewPC == "RETURN" then break end
+        if NewPC then
+            PC = NewPC
+        else
+            PC = PC + 1
+        end
+    end
+
+	--[[for _, Instruction in ipairs(Bytecode) do
 		ExecuteInstruction(Instruction)
-	end
+	end]]
 end
 
 return VM

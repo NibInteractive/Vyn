@@ -59,6 +59,19 @@ function Scanner:Tokenize()
 
             local Type = Rules.Keywords[IdString] or "IDENTIFIER"
             table.insert(Tokens, Token.New(Type, IdString, self.Line, StartCol))
+        elseif Character == ">" or Character == "<" then
+            local StartCol = self.Col
+            local _Character = self:NextCharacter()
+            local NextCharacter = self:Peek()
+
+            if NextCharacter == "=" then
+                self:NextCharacter()
+                local op = (_Character == ">" and "GTEQ" or "LTEQ")
+                table.insert(Tokens, Token.New(op, _Character..NextCharacter, self.Line, StartCol))
+            else
+                local op = (_Character == ">" and "GT" or "LT")
+                table.insert(Tokens, Token.New(op, _Character, self.Line, StartCol))
+            end
         elseif Rules.Operators[Character] then
             table.insert(Tokens, Token.New(Rules.Operators[Character], Character, self.Line, self.Col))
             self:NextCharacter()
