@@ -45,6 +45,8 @@ Rules.Operators = {
     ["<"] = "LT",
     [">="] = "GTEQ",
     ["<="] = "LTEQ",
+    ["~="] = "NEQ",
+    ["!="] = "NEQ",
 
     -- Others --
     [":"] = "COLON",

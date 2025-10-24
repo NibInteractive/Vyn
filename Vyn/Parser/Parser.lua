@@ -1,3 +1,5 @@
+local Logger = require("Vyn.utils.Logger")
+
 local Parser = {}
 
 local Precedence = {
@@ -8,12 +10,12 @@ local Precedence = {
     ["EXPO"] = 3, -- Exponentiation ^
     ["PRCNT"] = 3, -- Modulo %
 
-    ["EQ"] = 0, -- ==
-    ["NEQ"] = 0, -- !=
-    ["GT"] = 0, -- >
-    ["LT"] = 0, -- <
-    ["GTEQ"] = 0, -- >=
-    ["LTEQ"] = 0, -- <=
+    ["EQ"] = 1, -- ==
+    ["NEQ"] = 1, -- !=
+    ["GT"] = 1, -- >
+    ["LT"] = 1, -- <
+    ["GTEQ"] = 1, -- >=
+    ["LTEQ"] = 1, -- <=
 
     ["AND"] = -1,
     ["OR"] = -2,
@@ -31,10 +33,10 @@ local function Consume(Tokens, i, ExpectedType)
     return _Token, i+1
 end
 
-local function GetPrecedence(token)
-	if not token then return 0 end
+local function GetPrecedence(Token)
+	if not Token then return 0 end
 
-	return Precedence[token.Type] or 0
+	return Precedence[Token.Type] or 0
 end
 
 local function ParseBlock(Tokens, i, Style)
@@ -52,19 +54,27 @@ local function ParseBlock(Tokens, i, Style)
 
         _, i = Consume(Tokens, i, "RBRACE")
     elseif Style == "COLON" then
-        local BaseIndent = Tokens[i-1].Indent or 0
+        local BaseIndent = Tokens[i - 1].Indent or 0
         i = i + 1
 
-        while Tokens[i] and (Tokens[i].Indent or 0) > BaseIndent do
+        local Body = {}
+        while Tokens[i] do
+            local CurrentIndent = Tokens[i].Indent or BaseIndent + 1
+
+            if CurrentIndent <= BaseIndent or Tokens[i].Type == "ELSE" or Tokens[i].Type == "ELSEIF" or Tokens[i].Type == "END" then
+                break
+            end
+
             local stmt
             stmt, i = ParseStatement(Tokens, i)
-
             table.insert(Body, stmt)
         end
+
+        return { op = "BLOCK", Body = Body }, i
     elseif Style == "THEN" then
         i = i + 1
 
-        while Tokens[i] and Tokens[i].Type ~= "END" do
+        while Tokens[i] and Tokens[i].Type ~= "END" and Tokens[i].Type ~= "ELSE" and Tokens[i].Type ~= "ELSEIF" do
             local stmt
             stmt, i = ParseStatement(Tokens, i)
 
@@ -92,8 +102,13 @@ local function ParseIf(Tokens, i)
         elseif Tokens[i].Type == "LBRACE" then
             Style = "BRACE"
         else
-            error("Expected block start after if condition")
+            Logger.Error("Parser", "Expected block start after if condition", {
+                Token = Tokens[i].Type,
+                Index = i
+            })
         end
+    else
+        Logger.Error("Parser", "Unexpected end after if condition")
     end
 
     local BlockNode
@@ -101,25 +116,44 @@ local function ParseIf(Tokens, i)
 
     local Node = { op = "IF", Condition = Condition, Body = BlockNode.Body }
 
-    if Tokens[i] and Tokens[i].Type == "ELSE" then
+    while Tokens[i] and (Tokens[i].Type == "ELSEIF" or Tokens[i].Type == "ELSE") do
+        local Keyword = Tokens[i].Type
         i = i + 1
-        local ElseStyle
 
-        if Tokens[i] then
-            if Tokens[i].Type == "COLON" then
-                ElseStyle = "COLON"
-            elseif Tokens[i].Type == "THEN" then
-                ElseStyle = "THEN"
-            elseif Tokens[i].Type == "LBRACE" then
-                ElseStyle = "BRACE"
+        if Keyword == "ELSEIF" then
+            local ElseIfNode
+
+            ElseIfNode, i = ParseIf(Tokens, i)
+            Node.ElseBody = Node.ElseBody or {}
+            
+            table.insert(Node.ElseBody, ElseIfNode)
+        elseif Keyword == "ELSE" then
+            local ElseStyle
+            
+            if Tokens[i] then
+                if Tokens[i].Type == "COLON" then
+                    ElseStyle = "COLON"
+                elseif Tokens[i].Type == "THEN" then
+                    ElseStyle = "THEN"
+                elseif Tokens[i].Type == "LBRACE" then
+                    ElseStyle = "BRACE"
+                else
+                    Logger.Error("Parser", "Expected block start after else", {Token = Tokens[i].Type, Index = i})
+                end
             else
-                error("Expected block start after else")
+                Logger.Error("Parser", "Unexpected end after else")
             end
-        end
 
-        local ElseBlock
-        ElseBlock, i = ParseBlock(Tokens, i, ElseStyle)
-        Node.ElseBody = ElseBlock.Body
+            local ElseBlock
+            ElseBlock, i = ParseBlock(Tokens, i, ElseStyle)
+            Node.ElseBody = Node.ElseBody or {}
+
+            for _, stmt in ipairs(ElseBlock.Body) do
+                table.insert(Node.ElseBody, stmt)
+            end
+
+            break
+        end
     end
 
     return Node, i
@@ -197,8 +231,28 @@ function ParseStatement(Tokens, i)
         return { op = "PRINT", args = { Expression } }, i
     elseif _Token.Type == "IF" then
         return ParseIf(Tokens, i)
+    elseif _Token.Type == "ELSE" then
+        error("Parser Error: 'else' without matching 'if'")
     elseif _Token.Type == "FUNCTION" then
         return ParseFunction(Tokens, i)
+    elseif _Token.Type == "RETURN" then
+        i = i + 1
+        local Values = {}
+
+        while Tokens[i] and Tokens[i].Type ~= "NEWLINE" and Tokens[i].Type ~= "RBRACE" do
+            local Expression
+
+            Expression, i = ParseExpression(Tokens, i, 0)
+            table.insert(Values, Expression)
+
+            if Tokens[i] and Tokens[i].Type == "COMMA" then
+                i = i + 1
+            else
+                break
+            end
+        end
+
+        return { op = "RETURN", Values = Values }, i
     elseif _Token.Type == "IDENTIFIER" and Tokens[i+1] and Tokens[i+1].Type == "ASSIGN" then
         local Name = _Token.Value
         local Expression
@@ -214,7 +268,7 @@ function ParseStatement(Tokens, i)
 
         return Node, i
     else
-        error("Parser Error: Unknown statement ".._Token.Type)
+        Logger.Error("Parser", "Unknown statement", {Token = _Token.Type, Index = i})
     end
 end
 
@@ -228,6 +282,26 @@ function ParsePrimary(Tokens, i)
 	if _Token.Type == "NUMBER" then
 		return { Type = "NUMBER", Value = _Token.Value }, i + 1
 	elseif _Token.Type == "IDENTIFIER" then
+        if Tokens[i + 1] and Tokens[i + 1].Type == "LPAREN" then
+			local Name = _Token.Value
+			i = i + 2 
+
+			local args = {}
+			while Tokens[i] and Tokens[i].Type ~= "RPAREN" do
+				local Expression
+				Expression, i = ParseExpression(Tokens, i, 0)
+				table.insert(args, Expression)
+
+				if Tokens[i] and Tokens[i].Type == "COMMA" then
+					i = i + 1
+				end
+			end
+
+			_, i = Consume(Tokens, i, "RPAREN")
+
+			return { op = "CALL", Name = Name, Args = args }, i
+		end
+
 		return { Type = "VAR", Name = _Token.Value }, i + 1
 	elseif _Token.Type == "LPAREN" then
 		local Node

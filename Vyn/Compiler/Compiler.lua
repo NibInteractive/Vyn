@@ -1,10 +1,20 @@
+local Logger = require("Vyn.utils.Logger")
+
 local Compiler = {}
 
 local function CompileExpression(Node, Bytecode)
+	if not Node then Logger.Error("Compiler", "CompileExpression: nil node") end
+
 	if Node.Type == "NUMBER" then
 		table.insert(Bytecode, { op = "LOAD_CONST", arg = Node.Value })
 	elseif Node.Type == "VAR" then
 		table.insert(Bytecode, { op = "LOAD_VAR", Name = Node.Name })
+	elseif Node.Type == "CALL" then
+		for _, Argument in ipairs(Node.args or {}) do
+			CompileExpression(Argument, Bytecode)
+		end
+
+		table.insert(Bytecode, { op = "CALL_FUNCTION", Name = Node.Name, ArgCount = # (Node.args or {}) })
 	elseif Node.op then
 		-- Binary operation (PLUS, MINUS, MULT, DIV)
 		CompileExpression(Node.Left, Bytecode)
@@ -18,6 +28,18 @@ local function CompileExpression(Node, Bytecode)
 			table.insert(Bytecode, { op = "MULT" })
 		elseif Node.op == "DIV" then
 			table.insert(Bytecode, { op = "DIV" })
+		elseif Node.op == "GT" then
+			table.insert(Bytecode, { op = "COMPARE_GT" })
+		elseif Node.op == "LT" then
+			table.insert(Bytecode, { op = "COMPARE_LT" })
+		elseif Node.op == "GTEQ" then
+			table.insert(Bytecode, { op = "COMPARE_GTEQ" })
+		elseif Node.op == "LTEQ" then
+			table.insert(Bytecode, { op = "COMPARE_LTEQ" })
+		elseif Node.op == "EQ" then
+			table.insert(Bytecode, { op = "COMPARE_EQ" })
+		elseif Node.op == "NEQ" then
+			table.insert(Bytecode, { op = "COMPARE_NEQ" })
 		else
 			error("Unknown operation: " .. tostring(Node.op))
 		end
@@ -47,6 +69,7 @@ local function CompileStatement(Node, Bytecode)
 	elseif Node.op == "IF" then
 		CompileExpression(Node.Condition, Bytecode)
 		
+    	local JumpOverIfChainIndex = nil
     	local JumpIfFalseIndex = #Bytecode + 1
         table.insert(Bytecode, { op = "JUMP_IF_FALSE", Target = nil }) -- Todo: Fix later
 
@@ -54,34 +77,41 @@ local function CompileStatement(Node, Bytecode)
             CompileStatement(stmt, Bytecode)
         end
 
-        if Node.ElseBody then
-            local JumpOverElseIndex = #Bytecode + 1
-            table.insert(Bytecode, { op = "JUMP", Target = nil })
-
-			Bytecode[JumpIfFalseIndex].Target = #Bytecode + 1
-
-            for _, stmt in ipairs(Node.ElseBody) do
-                CompileStatement(stmt, Bytecode)
-            end
-
-            Bytecode[JumpOverElseIndex].Target = #Bytecode + 1
-        else
-            Bytecode[JumpIfFalseIndex].Target = #Bytecode + 1
-        end
-	elseif Node.op == "FUNCTION" then
-		local FunctionBytecode = {}
-		local OldBytecode = Bytecode
-		Bytecode = FunctionBytecode
-
-		for _, stmt in ipairs(Node.Body) do
-			CompileStatement(stmt, Bytecode)
+		if Node.ElseBody and #Node.ElseBody > 0 then
+			JumpOverIfChainIndex = #Bytecode + 1
+			table.insert(Bytecode, { op = "JUMP", Target = nil })
 		end
 
-		table.insert(Bytecode, { op = "RETURN" })
+    	Bytecode[JumpIfFalseIndex].Target = #Bytecode + 1
 
-       	Bytecode = OldBytecode
+		if Node.ElseBody and #Node.ElseBody > 0 then
+			for _, ElseNode in ipairs(Node.ElseBody) do
+				if ElseNode.op == "IF" then
+					CompileStatement(ElseNode, Bytecode)
+				else
+					CompileStatement(ElseNode, Bytecode)
+				end
+			end
+			
+			Bytecode[JumpOverIfChainIndex].Target = #Bytecode + 1
+		end
+	elseif Node.op == "FUNCTION" then
+		local FunctionBytecode = {}
 
-       	table.insert(Bytecode, { op = "FUNCTION_DECL", Name = Node.Name, Params = Node.Params, Body = FunctionBytecode })
+		for _, stmt in ipairs(Node.Body) do
+			CompileStatement(stmt, FunctionBytecode)
+		end
+		
+		table.insert(FunctionBytecode, { op = "RETURN" })
+		table.insert(Bytecode, { op = "FUNCTION_DECL", Name = Node.Name, Params = Node.Params, Body = FunctionBytecode })
+	elseif Node.op == "RETURN" then
+		if Node.Value then
+			CompileExpression(Node.Value, Bytecode)
+		else
+			table.insert(Bytecode, { op = "LOAD_CONST", arg = nil })
+		end
+
+		table.insert(Bytecode, { op = "RETURN"})
 	else
 		error("Unknown statement: "..tostring(Node.op))
 	end

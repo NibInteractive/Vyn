@@ -40,6 +40,24 @@ function Scanner:Tokenize()
 
         if Character:match("%s") then
             self:NextCharacter() -- Skip whitespace
+        elseif Character == "\n" then
+            self:NextCharacter()
+
+            local Count = 0
+
+            while self:Peek() == " " do
+                self:NextCharacter()
+                Count = Count + 1
+            end
+
+            local NextCharacter = self:Peek()
+
+            if NextCharacter ~= "" then
+                local DummyToken = Token.New("INDENT_MARKER", nil, self.Line, Count)
+
+                DummyToken.Indent = Count
+                table.insert(Tokens, DummyToken)
+            end
         elseif Rules.IsDigit(Character) then
             local StartCol = self.Col
             local NumberString = ""
@@ -51,7 +69,7 @@ function Scanner:Tokenize()
             table.insert(Tokens, Token.New("NUMBER", tonumber(NumberString), self.Line, StartCol))
         elseif Rules.IsLetter(Character) then
             local StartCol = self.Col
-            local IdString = ""
+            local IdString = self:NextCharacter()
 
             while Rules.IsLetter(self:Peek()) do
                 IdString = IdString .. self:NextCharacter()

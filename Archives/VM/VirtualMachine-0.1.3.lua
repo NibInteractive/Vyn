@@ -109,24 +109,6 @@ function VM.Run(Bytecode)
 			local b = table.remove(Stack)
 			local a = table.remove(Stack)
 			table.insert(Stack, a / b)
-		elseif instr.op == "COMPARE_GT" then
-			local b = table.remove(Stack); local a = table.remove(Stack)
-			table.insert(Stack, a > b)
-		elseif instr.op == "COMPARE_LT" then
-			local b = table.remove(Stack); local a = table.remove(Stack)
-			table.insert(Stack, a < b)
-		elseif instr.op == "COMPARE_GTEQ" then
-			local b = table.remove(Stack); local a = table.remove(Stack)
-			table.insert(Stack, a >= b)
-		elseif instr.op == "COMPARE_LTEQ" then
-			local b = table.remove(Stack); local a = table.remove(Stack)
-			table.insert(Stack, a <= b)
-		elseif instr.op == "COMPARE_EQ" then
-			local b = table.remove(Stack); local a = table.remove(Stack)
-			table.insert(Stack, a == b)
-		elseif instr.op == "COMPARE_NEQ" then
-			local b = table.remove(Stack); local a = table.remove(Stack)
-    		table.insert(Stack, a ~= b)
 		elseif instr.op == "PRINT" then
 			local Value = Stack[#Stack]
 			print(Value)
@@ -154,15 +136,12 @@ function VM.Run(Bytecode)
 
 			VM.Run(_FUNC.Body)
 			PopEnvironment()
-		elseif instr.op == "RETURN" then
-			for _, Value in ipairs(instr.Values or {}) do
-				table.insert(Stack, Value)
-			end
 
+			return nil
+		elseif instr.op == "RETURN" then
 			return "RETURN"
-		elseif instr.op == "JUMP_IF_FALSE" then
+		elseif instr.op == "JUMP_IF_ELSE" then
 			local Condition = table.remove(Stack)
-			
 			if not Condition then
 				return instr.Target
 			else
@@ -187,6 +166,10 @@ function VM.Run(Bytecode)
             PC = PC + 1
         end
     end
+
+	--[[for _, Instruction in ipairs(Bytecode) do
+		ExecuteInstruction(Instruction)
+	end]]
 end
 
 return VM
