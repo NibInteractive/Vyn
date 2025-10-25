@@ -39,6 +39,7 @@ function Scanner:Tokenize()
 
     while self.Position <= #self.Source do
         local Character = self:Peek()
+        local CurrentIndent = IndentStack[#IndentStack] or 0
 
         if Character:match("%s") then
             self:NextCharacter() -- Skip whitespace
@@ -58,11 +59,11 @@ function Scanner:Tokenize()
                 local LastIndent = IndentStack[#IndentStack]
 
                 if Count > LastIndent then
-                    table.insert(Tokens, Token.New("INDENT", nil, self.Line, Count))
+                    table.insert(Tokens, Token.New("INDENT", nil, self.Line, self.Col, Count))
                     table.insert(IndentStack, Count)
                 elseif Count < LastIndent then
                     while #IndentStack > 0 and Count < IndentStack[#IndentStack] do
-                        table.insert(Tokens, Token.New("DEDENT", nil, self.Line, Count))
+                        table.insert(Tokens, Token.New("DEDENT", nil, self.Line, self.Col, Count))
                         table.remove(IndentStack)
                     end
                 end
@@ -75,7 +76,7 @@ function Scanner:Tokenize()
                 NumberString = NumberString .. self:NextCharacter()
             end
 
-            table.insert(Tokens, Token.New("NUMBER", tonumber(NumberString), self.Line, StartCol))
+            table.insert(Tokens, Token.New("NUMBER", tonumber(NumberString), self.Line, StartCol, CurrentIndent))
         elseif Rules.IsLetter(Character) then
             local StartCol = self.Col
             local IdString = self:NextCharacter()
@@ -85,7 +86,7 @@ function Scanner:Tokenize()
             end
 
             local Type = Rules.Keywords[IdString] or "IDENTIFIER"
-            table.insert(Tokens, Token.New(Type, IdString, self.Line, StartCol))
+            table.insert(Tokens, Token.New(Type, IdString, self.Line, StartCol, CurrentIndent))
         elseif Character == ">" or Character == "<" then
             local StartCol = self.Col
             local _Character = self:NextCharacter()
@@ -94,13 +95,13 @@ function Scanner:Tokenize()
             if NextCharacter == "=" then
                 self:NextCharacter()
                 local op = (_Character == ">" and "GTEQ" or "LTEQ")
-                table.insert(Tokens, Token.New(op, _Character..NextCharacter, self.Line, StartCol))
+                table.insert(Tokens, Token.New(op, _Character..NextCharacter, self.Line, StartCol, CurrentIndent))
             else
                 local op = (_Character == ">" and "GT" or "LT")
-                table.insert(Tokens, Token.New(op, _Character, self.Line, StartCol))
+                table.insert(Tokens, Token.New(op, _Character, self.Line, StartCol, CurrentIndent))
             end
         elseif Rules.Operators[Character] then
-            table.insert(Tokens, Token.New(Rules.Operators[Character], Character, self.Line, self.Col))
+            table.insert(Tokens, Token.New(Rules.Operators[Character], Character, self.Line, self.Col, CurrentIndent))
             self:NextCharacter()
         else
             Errors.Warn("Unknown character '"..Character.."'", self.Line, self.Col)
@@ -109,7 +110,11 @@ function Scanner:Tokenize()
     end
 
     while #IndentStack > 1 do
-        table.insert(Tokens, Token.New("DEDENT", nil, self.Line, 0))
+        local LastIndent = IndentStack[#IndentStack]
+
+        print("Adding DEDENT for indent level: "..LastIndent)
+
+        table.insert(Tokens, Token.New("DEDENT", nil, self.Line, 0, LastIndent))
         table.remove(IndentStack)
     end
 

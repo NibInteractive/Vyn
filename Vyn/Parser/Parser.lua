@@ -58,15 +58,24 @@ local function ParseBlock(Tokens, i, Style)
 
         _, i = Consume(Tokens, i, "RBRACE")
     elseif Style == "COLON" then
+        error("Parser Error: COLON block style not implemented yet")
+
         local BaseIndent = Tokens[i - 1].Indent or 0
         i = i + 1
 
-        while Tokens[i] do
-            local CurrentIndent = Tokens[i].Indent or 0
+        local Iteration = 0
 
-            if CurrentIndent <= BaseIndent or Tokens[i].Type == "END"
-                or Tokens[i].Type == "ELSE" or Tokens[i].Type == "ELSEIF"
-            then
+        while Tokens[i] do
+            Iteration = Iteration + 1
+            if Iteration > 10000 then
+                error("Parser Error: Possible infinite loop detected while parsing block")
+            end
+
+            local CurrentIndent = Tokens[i].Indent or 0
+            local _Type = Tokens[i].Type
+
+            print("[DEBUG] Block:", Style, "Token:", _Type, "Indent:", CurrentIndent, "Base:", BaseIndent)
+            if CurrentIndent <= BaseIndent or _Type == "END" or _Type == "ELSE" or _Type == "ELSEIF" then
                 break
             end
 
@@ -84,11 +93,42 @@ local function ParseBlock(Tokens, i, Style)
 
             table.insert(Body, stmt)
         end
-
-        _, i = Consume(Tokens, i, "END")
     end
 
     return { op = "BLOCK", Body = Body }, i
+end
+
+local function ParseElse(Tokens, i, ParentStyle)
+    if not Tokens[i] then
+        Logger.Error("Parser", "Unexpected end after else")
+        
+        return {}, i
+    end
+
+    local Style
+
+    if ParentStyle == "THEN" then
+        Style = "THEN"
+    elseif Tokens[i].Type == "COLON" then
+        Style = "COLON"
+        i = i + 1
+    elseif Tokens[i].Type == "LBRACE" then
+        Style = "BRACE"
+        i = i + 1
+    elseif ParentStyle == "BRACE" or ParentStyle == "COLON" then
+        Style = ParentStyle
+    else
+        Logger.Error("Parser", "Expected block start after else", {
+            Token = Tokens[i].Type,
+            Index = i
+        })
+
+        return {}, i
+    end
+
+    local ElseBlock, NextIndex = ParseBlock(Tokens, i, Style)
+
+    return ElseBlock.Body, NextIndex
 end
 
 local function ParseIf(Tokens, i)
@@ -100,11 +140,16 @@ local function ParseIf(Tokens, i)
 
     if Tokens[i] then
         if Tokens[i].Type == "COLON" then
+            error("Parser Error: COLON block style not implemented yet")
+
             Style = "COLON"
+            i = i + 1
         elseif Tokens[i].Type == "THEN" then
             Style = "THEN"
+            i = i + 1
         elseif Tokens[i].Type == "LBRACE" then
             Style = "BRACE"
+            i = i + 1
         else
             Logger.Error("Parser", "Expected block start after if condition", {
                 Token = Tokens[i].Type,
@@ -133,31 +178,35 @@ local function ParseIf(Tokens, i)
             table.insert(Node.ElseBody, ElseIfNode)
         elseif Keyword == "ELSE" then
             local ElseStyle
-            
+
             if Tokens[i] then
-                if Tokens[i].Type == "COLON" then
-                    ElseStyle = "COLON"
-                elseif Tokens[i].Type == "THEN" then
+                if Style == "THEN" then
                     ElseStyle = "THEN"
+                elseif Tokens[i].Type == "COLON" then
+                    ElseStyle = "COLON"
+                    i = i + 1
                 elseif Tokens[i].Type == "LBRACE" then
                     ElseStyle = "BRACE"
+                    i = i + 1
                 else
-                    Logger.Error("Parser", "Expected block start after else", {Token = Tokens[i].Type, Index = i})
+                    ElseStyle = "THEN"
                 end
             else
-                Logger.Error("Parser", "Unexpected end after else")
+                ElseStyle = "THEN"
             end
 
             local ElseBlock
             ElseBlock, i = ParseBlock(Tokens, i, ElseStyle)
-            Node.ElseBody = Node.ElseBody or {}
-
-            for _, stmt in ipairs(ElseBlock.Body) do
-                table.insert(Node.ElseBody, stmt)
-            end
+            Node.ElseBody = ElseBlock.Body
 
             break
         end
+    end
+
+    if Tokens[i] and Tokens[i].Type == "END" then
+        i = i + 1
+    else
+        Logger.Error("Parser", "Expected END after if statement", {Token = Tokens[i] and Tokens[i].Type or "nil", Index = i})
     end
 
     return Node, i
@@ -194,6 +243,8 @@ local function ParseFunction(Tokens, i)
     elseif Tokens[i].Type == "END" then
         Style = "THEN"
     elseif Tokens[i].Type == "COLON" then
+        error("Parser Error: COLON block style not implemented yet")
+        
         Style = "COLON"
     else
         Style = "BRACE"
@@ -207,6 +258,7 @@ end
 
 function ParseStatement(Tokens, i)
     local _Token = Tokens[i]
+    if not _Token then return nil, i end
 
     if _Token.Type == "LOCAL" or _Token.Type == "PRIVATE" then
         i = i + 1
@@ -235,8 +287,6 @@ function ParseStatement(Tokens, i)
         return { op = "PRINT", args = { Expression } }, i
     elseif _Token.Type == "IF" then
         return ParseIf(Tokens, i)
-    elseif _Token.Type == "ELSE" then
-        return { op = "ELSE_MARKER" }, i
     elseif _Token.Type == "FUNCTION" then
         return ParseFunction(Tokens, i)
     elseif _Token.Type == "RETURN" then

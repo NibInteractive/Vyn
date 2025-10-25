@@ -72,7 +72,7 @@ function Runner.RunSource(Source, Name, Verbose)
 			ColorPrint("Tokens:", Colors.Cyan)
 
 			for _, t in ipairs(tokens) do
-				print(t.Type, t.Value)
+				print(t.Type, t.Value, "Line "..t.Line, "Column "..t.Col)--, "Indent Level "..t.IndentLevel)
 			end
 		end
 
@@ -80,6 +80,7 @@ function Runner.RunSource(Source, Name, Verbose)
 
 		if Verbose then
 			ColorPrint("AST:", Colors.Cyan)
+
 			for _, node in ipairs(AST) do
 				print(node.op, node.args and node.args[1].Value or "")
 			end
@@ -89,6 +90,7 @@ function Runner.RunSource(Source, Name, Verbose)
 
 		if Verbose then
 			ColorPrint("Bytecode:", Colors.Cyan)
+			
 			for _, instr in ipairs(Bytecode) do
 				print(instr.op, instr.arg or instr.Name or "")
 			end
