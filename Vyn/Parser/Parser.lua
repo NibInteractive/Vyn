@@ -23,6 +23,10 @@ local Precedence = {
     ["ASSIGN"] = -3,
 }
 
+local function Peek(Tokens, i)
+    return Tokens[i]
+end
+
 local function Consume(Tokens, i, ExpectedType)
     local _Token = Tokens[i]
 
@@ -57,20 +61,20 @@ local function ParseBlock(Tokens, i, Style)
         local BaseIndent = Tokens[i - 1].Indent or 0
         i = i + 1
 
-        local Body = {}
         while Tokens[i] do
-            local CurrentIndent = Tokens[i].Indent or BaseIndent + 1
+            local CurrentIndent = Tokens[i].Indent or 0
 
-            if CurrentIndent <= BaseIndent or Tokens[i].Type == "ELSE" or Tokens[i].Type == "ELSEIF" or Tokens[i].Type == "END" then
+            if CurrentIndent <= BaseIndent or Tokens[i].Type == "END"
+                or Tokens[i].Type == "ELSE" or Tokens[i].Type == "ELSEIF"
+            then
                 break
             end
 
             local stmt
+            
             stmt, i = ParseStatement(Tokens, i)
             table.insert(Body, stmt)
         end
-
-        return { op = "BLOCK", Body = Body }, i
     elseif Style == "THEN" then
         i = i + 1
 
@@ -232,7 +236,7 @@ function ParseStatement(Tokens, i)
     elseif _Token.Type == "IF" then
         return ParseIf(Tokens, i)
     elseif _Token.Type == "ELSE" then
-        error("Parser Error: 'else' without matching 'if'")
+        return { op = "ELSE_MARKER" }, i
     elseif _Token.Type == "FUNCTION" then
         return ParseFunction(Tokens, i)
     elseif _Token.Type == "RETURN" then

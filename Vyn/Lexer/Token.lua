@@ -6,7 +6,8 @@ function Token.New(Type, Value, Line, Col)
         Type = Type,
         Value = Value,
         Line = Line,
-        Col = Col
+        Col = Col,
+        IndentLevel = 0,
     }, Token)
 end
 

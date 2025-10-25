@@ -10,7 +10,8 @@ function Scanner.New(Source)
         Source = Source,
         Position = 1,
         Line = 1,
-        Col = 1
+        Col = 1,
+        IndentLevel = 0,
     }, Scanner)
 end
 
@@ -34,6 +35,7 @@ end
 
 function Scanner:Tokenize()
     local Tokens = {}
+    local IndentStack = {0}
 
     while self.Position <= #self.Source do
         local Character = self:Peek()
@@ -53,10 +55,17 @@ function Scanner:Tokenize()
             local NextCharacter = self:Peek()
 
             if NextCharacter ~= "" then
-                local DummyToken = Token.New("INDENT_MARKER", nil, self.Line, Count)
+                local LastIndent = IndentStack[#IndentStack]
 
-                DummyToken.Indent = Count
-                table.insert(Tokens, DummyToken)
+                if Count > LastIndent then
+                    table.insert(Tokens, Token.New("INDENT", nil, self.Line, Count))
+                    table.insert(IndentStack, Count)
+                elseif Count < LastIndent then
+                    while #IndentStack > 0 and Count < IndentStack[#IndentStack] do
+                        table.insert(Tokens, Token.New("DEDENT", nil, self.Line, Count))
+                        table.remove(IndentStack)
+                    end
+                end
             end
         elseif Rules.IsDigit(Character) then
             local StartCol = self.Col
@@ -97,6 +106,11 @@ function Scanner:Tokenize()
             Errors.Warn("Unknown character '"..Character.."'", self.Line, self.Col)
             self:NextCharacter()
         end
+    end
+
+    while #IndentStack > 1 do
+        table.insert(Tokens, Token.New("DEDENT", nil, self.Line, 0))
+        table.remove(IndentStack)
     end
 
     return Tokens

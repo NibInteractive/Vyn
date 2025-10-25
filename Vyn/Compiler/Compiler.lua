@@ -2,6 +2,19 @@ local Logger = require("Vyn.utils.Logger")
 
 local Compiler = {}
 
+local Ops = {
+	PLUS = "ADD",
+	MINUS = "SUB",
+	MULT = "MULT",
+	DIV = "DIV",
+	GT = "COMPARE_GT",
+	LT = "COMPARE_LT",
+	GTEQ = "COMPARE_GTEQ",
+	LTEQ = "COMPARE_LTEQ",
+	EQ = "COMPARE_EQ",
+	NEQ = "COMPARE_NEQ",
+}
+
 local function CompileExpression(Node, Bytecode)
 	if not Node then Logger.Error("Compiler", "CompileExpression: nil node") end
 
@@ -20,29 +33,7 @@ local function CompileExpression(Node, Bytecode)
 		CompileExpression(Node.Left, Bytecode)
 		CompileExpression(Node.Right, Bytecode)
 
-		if Node.op == "PLUS" then
-			table.insert(Bytecode, { op = "ADD" })
-		elseif Node.op == "MINUS" then
-			table.insert(Bytecode, { op = "SUB" })
-		elseif Node.op == "MULT" then
-			table.insert(Bytecode, { op = "MULT" })
-		elseif Node.op == "DIV" then
-			table.insert(Bytecode, { op = "DIV" })
-		elseif Node.op == "GT" then
-			table.insert(Bytecode, { op = "COMPARE_GT" })
-		elseif Node.op == "LT" then
-			table.insert(Bytecode, { op = "COMPARE_LT" })
-		elseif Node.op == "GTEQ" then
-			table.insert(Bytecode, { op = "COMPARE_GTEQ" })
-		elseif Node.op == "LTEQ" then
-			table.insert(Bytecode, { op = "COMPARE_LTEQ" })
-		elseif Node.op == "EQ" then
-			table.insert(Bytecode, { op = "COMPARE_EQ" })
-		elseif Node.op == "NEQ" then
-			table.insert(Bytecode, { op = "COMPARE_NEQ" })
-		else
-			error("Unknown operation: " .. tostring(Node.op))
-		end
+		table.insert(Bytecode, { op = Ops[Node.op] or error("Unknown operation: " .. tostring(Node.op)) })
 	else
 		error("Unknown Node Type in compilation")
 	end
