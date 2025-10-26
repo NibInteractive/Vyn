@@ -106,24 +106,20 @@ local function ParseElse(Tokens, i, ParentStyle)
     end
 
     local Style
+    local TokenType = Tokens[i].Type
 
     if ParentStyle == "THEN" then
         Style = "THEN"
-    elseif Tokens[i].Type == "COLON" then
+    elseif TokenType == "COLON" then
         Style = "COLON"
         i = i + 1
-    elseif Tokens[i].Type == "LBRACE" then
+    elseif TokenType == "LBRACE" then
         Style = "BRACE"
         i = i + 1
     elseif ParentStyle == "BRACE" or ParentStyle == "COLON" then
         Style = ParentStyle
     else
-        Logger.Error("Parser", "Expected block start after else", {
-            Token = Tokens[i].Type,
-            Index = i
-        })
-
-        return {}, i
+        Style = ParentStyle or "THEN"
     end
 
     local ElseBlock, NextIndex = ParseBlock(Tokens, i, Style)
@@ -174,39 +170,21 @@ local function ParseIf(Tokens, i)
 
             ElseIfNode, i = ParseIf(Tokens, i)
             Node.ElseBody = Node.ElseBody or {}
-            
+
             table.insert(Node.ElseBody, ElseIfNode)
         elseif Keyword == "ELSE" then
-            local ElseStyle
-
-            if Tokens[i] then
-                if Style == "THEN" then
-                    ElseStyle = "THEN"
-                elseif Tokens[i].Type == "COLON" then
-                    ElseStyle = "COLON"
-                    i = i + 1
-                elseif Tokens[i].Type == "LBRACE" then
-                    ElseStyle = "BRACE"
-                    i = i + 1
-                else
-                    ElseStyle = "THEN"
-                end
-            else
-                ElseStyle = "THEN"
-            end
-
-            local ElseBlock
-            ElseBlock, i = ParseBlock(Tokens, i, ElseStyle)
-            Node.ElseBody = ElseBlock.Body
+            Node.ElseBody, i = ParseElse(Tokens, i, Style)
 
             break
         end
     end
 
-    if Tokens[i] and Tokens[i].Type == "END" then
-        i = i + 1
-    else
-        Logger.Error("Parser", "Expected END after if statement", {Token = Tokens[i] and Tokens[i].Type or "nil", Index = i})
+    if Style == "THEN" then
+        if Tokens[i] and Tokens[i].Type == "END" then
+            i = i + 1
+        else
+            Logger.Error("Parser", "Expected END after if statement", {Token = Tokens[i] and Tokens[i].Type or "nil", Index = i})
+        end
     end
 
     return Node, i
